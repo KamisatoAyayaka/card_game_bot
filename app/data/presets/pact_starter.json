@@ -1,0 +1,31 @@
+{
+  "name": "pact_starter",
+  "faction_id": "ashen_pact",
+  "leader_card_id": "pact_pyromancer",
+  "description": "Стартовая колода Пепельного Договора — fiery swarm с элементальными и героем-фениксом.",
+  "card_ids": [
+    "pact_ember_cultist",
+    "pact_ember_cultist",
+    "pact_ember_cultist",
+    "pact_flame_acolyte",
+    "pact_flame_acolyte",
+    "pact_pyre_elemental",
+    "pact_pyre_elemental",
+    "pact_cinder_priest",
+    "pact_inferno_titan",
+    "pact_inferno_titan",
+    "pact_ashen_spy",
+    "pact_ember_medic",
+    "pact_phoenix",
+    "pact_lord_of_embers",
+    "pact_cataclysm",
+    "pact_burning_archer",
+    "pact_burning_archer",
+    "weather_biting_frost",
+    "weather_clear_skies",
+    "neutral_decoy",
+    "neutral_mercenary",
+    "neutral_traveling_medic",
+    "neutral_dragon"
+  ]
+}

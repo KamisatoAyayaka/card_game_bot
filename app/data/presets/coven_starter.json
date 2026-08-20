@@ -1,0 +1,31 @@
+{
+  "name": "coven_starter",
+  "faction_id": "verdant_coven",
+  "leader_card_id": "coven_archdruid",
+  "description": "Стартовая колода Изумрудного Ковена — делает упор на мобилизацию зверей и лесных духов.",
+  "card_ids": [
+    "coven_dryad",
+    "coven_dryad",
+    "coven_wolf",
+    "coven_wolf",
+    "coven_wolf",
+    "coven_wolf_alpha",
+    "coven_druid",
+    "coven_treant",
+    "coven_treant",
+    "coven_horned_goddess",
+    "coven_shapeshifter",
+    "coven_herb_witch",
+    "coven_briar_guard",
+    "coven_briar_guard",
+    "coven_lightning_call",
+    "coven_elder_ent",
+    "weather_biting_frost",
+    "weather_impregnable_fog",
+    "weather_clear_skies",
+    "neutral_decoy",
+    "neutral_wandering_bard",
+    "neutral_dragon",
+    "neutral_mercenary"
+  ]
+}

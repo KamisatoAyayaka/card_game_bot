@@ -1,0 +1,44 @@
+[
+  {
+    "id": "legion_commander",
+    "name": "Легат Корвус",
+    "faction_id": "iron_legion",
+    "type": "leader",
+    "row": null,
+    "base_strength": 0,
+    "tags": ["human", "commander"],
+    "hero": false,
+    "effects": [],
+    "description": "Главнокомандующий Железного Легиона. Способность фракции: «Железный строй» — удвоить силу всех осадных машин на вашей стороне.",
+    "art_url": null,
+    "rarity": "legendary"
+  },
+  {
+    "id": "coven_archdruid",
+    "name": "Верховная Мать Остролист",
+    "faction_id": "verdant_coven",
+    "type": "leader",
+    "row": null,
+    "base_strength": 0,
+    "tags": ["druid", "elf"],
+    "hero": false,
+    "effects": [],
+    "description": "Предводительница Изумрудного Ковена. Способность фракции: «Гнев леса» — уничтожить самую сильную единицу противника в ближнем ряду.",
+    "art_url": null,
+    "rarity": "legendary"
+  },
+  {
+    "id": "pact_pyromancer",
+    "name": "Проповедник Пепла",
+    "faction_id": "ashen_pact",
+    "type": "leader",
+    "row": null,
+    "base_strength": 0,
+    "tags": ["cultist", "human"],
+    "hero": false,
+    "effects": [],
+    "description": "Голос Огненной Бездны. Способность фракции: «Огненный шквал» — снять погоду и нанести 1 урон всем единицам противника.",
+    "art_url": null,
+    "rarity": "legendary"
+  }
+]

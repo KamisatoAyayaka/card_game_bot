@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: gwent-discord-bot
+    runtime: python
+    region: frankfurt
+    plan: free
+    # Render automatically runs `pip install -r requirements.txt` for Python services
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m app.main
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: DISCORD_APPLICATION_ID
+        sync: false
+      - key: DATABASE_PATH
+        value: /var/data/gwent.db
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: PORT
+        value: 10000
+      - key: LOG_LEVEL
+        value: INFO
+    disk:
+      name: gwent-data
+      mountPath: /var/data
+      sizeGB: 1

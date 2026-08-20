@@ -1,0 +1,31 @@
+{
+  "name": "legion_starter",
+  "faction_id": "iron_legion",
+  "leader_card_id": "legion_commander",
+  "description": "Стартовая колода Железного Легиона — сбалансированный набор для освоения механик.",
+  "card_ids": [
+    "legion_legionary",
+    "legion_legionary",
+    "legion_legionary",
+    "legion_centurion",
+    "legion_praetorian",
+    "legion_archer",
+    "legion_archer",
+    "legion_ballista",
+    "legion_ballista",
+    "legion_catapult",
+    "legion_scout",
+    "legion_field_medic",
+    "legion_trebuchet",
+    "legion_emperor",
+    "legion_scorch_artillery",
+    "weather_biting_frost",
+    "weather_impregnable_fog",
+    "weather_torrential_rain",
+    "weather_clear_skies",
+    "neutral_decoy",
+    "neutral_mercenary",
+    "neutral_mercenary",
+    "neutral_dragon"
+  ]
+}
