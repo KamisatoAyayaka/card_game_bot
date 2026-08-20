@@ -25,6 +25,8 @@ services:
         value: "10000"
       - key: LOG_LEVEL
         value: INFO
+      - key: DEV_GUILD_ID
+        sync: false
     disk:
       name: gwent-data
       mountPath: /var/data

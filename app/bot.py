@@ -49,11 +49,34 @@ class GwentBot(discord.Client):
         if CONFIG.dev_guild_id:
             guild = discord.Object(id=CONFIG.dev_guild_id)
             self.tree.copy_global_to(guild=guild)
-            synced = await self.tree.sync(guild=guild)
-            log.info("Synced %d command(s) to dev guild %s.", len(synced), CONFIG.dev_guild_id)
+            try:
+                synced = await self.tree.sync(guild=guild)
+                log.info("Synced %d command(s) to dev guild %s.", len(synced), CONFIG.dev_guild_id)
+            except discord.errors.HTTPException as e:
+                log.error("Guild command sync failed: %s. Commands may not be available.", e)
         else:
-            synced = await self.tree.sync()
-            log.info("Synced %d command(s) globally.", len(synced))
+            # Global sync can fail if the application has an Entry Point command
+            # configured in Discord Developer Portal (Embedded App / Activity).
+            # Discord API error 50240: "You cannot remove this app's Entry Point
+            # command in a bulk update operation."
+            # Workaround: catch and continue — previously registered commands
+            # remain available. To force-resync, set DEV_GUILD_ID env var.
+            try:
+                synced = await self.tree.sync()
+                log.info("Synced %d command(s) globally.", len(synced))
+            except discord.errors.HTTPException as e:
+                if e.code == 50240:
+                    log.warning(
+                        "Global command sync skipped — application has an Entry Point "
+                        "command configured in Discord Developer Portal. Either: "
+                        "(a) set DEV_GUILD_ID env var to sync commands to a specific "
+                        "guild instead, or (b) remove the Embedded App / Activity "
+                        "from Discord Developer Portal → General Information. "
+                        "Bot will continue with previously-registered commands (if any)."
+                    )
+                    log.warning("Original Discord error: %s", e)
+                else:
+                    log.error("Global command sync failed (code=%s): %s", e.code, e)
 
     async def on_ready(self) -> None:
         log.info("Logged in as %s (id=%s)", self.user, self.user.id if self.user else "?")
