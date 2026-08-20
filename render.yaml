@@ -4,6 +4,7 @@ services:
     runtime: python
     region: frankfurt
     plan: free
+    pythonVersion: "3.11.9"
     # Render automatically runs `pip install -r requirements.txt` for Python services
     buildCommand: pip install -r requirements.txt
     startCommand: python -m app.main
@@ -11,7 +12,7 @@ services:
     autoDeploy: true
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.9
+        value: "3.11.9"
       - key: DISCORD_TOKEN
         sync: false
       - key: DISCORD_APPLICATION_ID
@@ -21,7 +22,7 @@ services:
       - key: PUBLIC_BASE_URL
         sync: false
       - key: PORT
-        value: 10000
+        value: "10000"
       - key: LOG_LEVEL
         value: INFO
     disk:
