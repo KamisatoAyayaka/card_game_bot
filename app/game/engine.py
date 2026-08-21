@@ -422,16 +422,22 @@ class Match:
         If `viewer_discord_id` is provided, that player's hand is included
         (with full card details). Other players' hands are obscured (only
         card count is exposed).
+
+        **IMPORTANT**: `discord_id` fields are returned as **strings**,
+        not ints. Discord snowflake IDs are 18-digit numbers that exceed
+        JavaScript's `Number.MAX_SAFE_INTEGER` (2^53 - 1), so passing them
+        as JSON numbers causes precision loss in the browser and breaks
+        identity comparison (msg.you !== player.discord_id).
         """
         return {
             "match_id": self.match_id,
             "phase": self.phase.value,
             "round": self.current_round,
             "rounds_total": self.rounds_total,
-            "current_player_id": self.current_player.discord_id,
+            "current_player_id": str(self.current_player.discord_id),
             "players": [
                 {
-                    "discord_id": p.discord_id,
+                    "discord_id": str(p.discord_id),
                     "name": p.display_name,
                     "faction_id": p.faction_id,
                     "rounds_won": p.rounds_won,

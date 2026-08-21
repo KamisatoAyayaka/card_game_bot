@@ -35,8 +35,45 @@ class GwentBot(discord.Client):
     async def setup_hook(self) -> None:
         # Initialize DB schema + load card cache
         await Database.init_schema()
-        await CardService.reload()
-        log.info("Database initialized and card cache loaded (%d cards).", len(CardService._cache))
+
+        # Auto-seed cards from JSON if the database is empty.
+        # This makes the bot self-bootstrapping on fresh deployments (Zeabur,
+        # render.com free tier, etc.) without requiring manual `seed_cards`.
+        from app.services.card_service import CardService as _cs
+        await _cs.reload()
+        if len(_cs._cache) == 0:
+            log.info("Card database is empty — auto-seeding from JSON files...")
+            from app.config import CARDS_JSON_DIR, FACTIONS_JSON, LEADERS_JSON
+            from app.services.import_export import (
+                import_all_cards_from_dir,
+                import_factions_from_json,
+                import_leaders_from_json,
+            )
+            try:
+                f_count = await import_factions_from_json(FACTIONS_JSON)
+                l_count = await import_leaders_from_json(LEADERS_JSON)
+                c_count = await import_all_cards_from_dir(CARDS_JSON_DIR)
+                log.info(
+                    "Auto-seeded: %d factions, %d leaders, %d cards.", f_count, l_count, c_count
+                )
+                await _cs.reload()
+
+                # Also generate card PNG images if the static directory is empty
+                static_cards_dir = CARDS_JSON_DIR.parent / "static" / "cards"
+                if not static_cards_dir.exists() or not any(static_cards_dir.glob("*.png")):
+                    log.info("Card images missing — generating PNGs...")
+                    try:
+                        from scripts.generate_card_images import generate_all_cards
+                        img_count = await generate_all_cards()
+                        log.info("Generated %d card image(s).", img_count)
+                    except Exception as e:
+                        log.warning("Card image generation failed (non-fatal): %s", e)
+            except Exception as e:
+                log.error("Auto-seed failed: %s", e)
+
+        log.info(
+            "Database initialized and card cache loaded (%d cards).", len(_cs._cache)
+        )
 
         # Register all command groups
         register_gwent_commands(self.tree, self)

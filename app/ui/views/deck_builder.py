@@ -137,9 +137,12 @@ class FactionSelect(ui.Select):
 class LeaderSelect(ui.Select):
     def __init__(self, parent: DeckBuilderView) -> None:
         self.parent = parent
+        # NOTE: Discord API requires min_values=1 (not 0) — when min_values=0,
+        # it requires 25+ options, which we don't have for leaders.
+        # Workaround: use min_values=1 and always include a "no leader" option.
         super().__init__(
             placeholder="Лидер фракции (необязательно)",
-            min_values=0,
+            min_values=1,
             max_values=1,
             options=[discord.SelectOption(label="Загрузка…", value="__loading__")],
             custom_id="deck_leader_select",
@@ -153,13 +156,13 @@ class LeaderSelect(ui.Select):
             return
         cards = await CardService.cards_by_faction(self.parent.faction_id)
         leaders = [c for c in cards if c.type == CardType.LEADER]
-        if not leaders:
-            self.options = [discord.SelectOption(label="Нет лидеров", value="__none__")]
-        else:
-            self.options = [
-                discord.SelectOption(label=l.name, value=l.id, description=(l.description or "")[:100])
-                for l in leaders[:25]
-            ]
+        # Always include a "no leader" option as the first item
+        opts = [discord.SelectOption(label="— Без лидера —", value="__none__")]
+        opts.extend([
+            discord.SelectOption(label=l.name, value=l.id, description=(l.description or "")[:100])
+            for l in leaders[:24]  # 1 + 24 = 25 max
+        ])
+        self.options = opts
         self._populated = True
 
     async def callback(self, interaction: discord.Interaction) -> None:
@@ -169,8 +172,13 @@ class LeaderSelect(ui.Select):
             await interaction.response.send_message("Это не ваш билдер.", ephemeral=True)
             return
         chosen = self.values[0] if self.values else None
-        if chosen in ("__loading__", "__none__"):
+        if chosen == "__loading__":
             await interaction.response.edit_message(view=self.parent)
+            return
+        if chosen == "__none__":
+            # User explicitly chose "no leader"
+            self.parent.leader_card_id = None
+            await interaction.response.edit_message(embed=await self.parent.render(), view=self.parent)
             return
         self.parent.leader_card_id = chosen
         await interaction.response.edit_message(embed=await self.parent.render(), view=self.parent)

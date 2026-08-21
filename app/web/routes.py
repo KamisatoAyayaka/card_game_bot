@@ -110,7 +110,12 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
 
     # Send initial state immediately (personalized to this viewer)
     snap = match.snapshot(viewer_discord_id=tok.discord_id)
-    await ws.send_json({"type": "state", "snapshot": snap, "you": tok.discord_id})
+    await ws.send_json({
+        "type": "state",
+        "snapshot": snap,
+        # Send as string — Discord IDs exceed JS Number.MAX_SAFE_INTEGER
+        "you": str(tok.discord_id),
+    })
 
     # Listen for messages
     try:

@@ -78,7 +78,10 @@
   function handleMessage(msg) {
     if (msg.type === "state") {
       snapshot = msg.snapshot;
-      if (msg.you !== undefined) youId = msg.you;
+      // `you` is sent as a string because Discord snowflake IDs exceed
+      // JavaScript's Number.MAX_SAFE_INTEGER (2^53 - 1).
+      // We compare IDs as strings everywhere.
+      if (msg.you !== undefined) youId = String(msg.you);
       render();
     } else if (msg.type === "error") {
       showToast(msg.message);
@@ -95,14 +98,20 @@
     $("round-total").textContent = snapshot.rounds_total;
     $("phase").textContent = phaseLabel(snapshot.phase);
 
-    isYourTurn = snapshot.current_player_id === youId && snapshot.phase === "in_progress";
+    isYourTurn = String(snapshot.current_player_id) === youId && snapshot.phase === "in_progress";
 
     // Determine "you" vs "opponent(s)"
-    const you = snapshot.players.find((p) => p.discord_id === youId);
-    const opponents = snapshot.players.filter((p) => p.discord_id !== youId);
+    const you = snapshot.players.find((p) => String(p.discord_id) === youId);
+    const opponents = snapshot.players.filter((p) => String(p.discord_id) !== youId);
 
     // Top bar
     renderWeather(snapshot.weather);
+
+    // Update name displays (these were never updated before, causing "Ожидание противника…" to persist)
+    if (you) {
+      $("your-name").textContent = you.name;
+      $("your-name-display").textContent = you.name;
+    }
 
     // Your area
     if (you) {
@@ -113,6 +122,9 @@
     // Opponent area (first opponent only for simplicity; if 3+ players, others fold into opponent area)
     if (opponents.length > 0) {
       renderPlayerArea(opponents[0], "opponent");
+      $("opponent-name").textContent = opponents[0].name + (opponents[0].passed ? " 💤" : "");
+    } else {
+      $("opponent-name").textContent = "Ожидание противника…";
     }
 
     // Action buttons
@@ -137,7 +149,7 @@
 
     // If match finished, show overlay
     if (snapshot.phase === "finished") {
-      const winner = snapshot.players.find((p) => p.discord_id === (snapshot.winner_id || -1));
+      const winner = snapshot.players.find((p) => String(p.discord_id) === String(snapshot.winner_id || ""));
       showOverlay(
         winner
           ? `🏆 Победитель: ${winner.name}!`
@@ -185,7 +197,7 @@
 
     // Highlight current player
     const area = $(prefix === "you" ? "you-area" : "opponent-area");
-    if (player.discord_id === snapshot.current_player_id && snapshot.phase === "in_progress") {
+    if (String(player.discord_id) === String(snapshot.current_player_id) && snapshot.phase === "in_progress") {
       area.classList.add("active-turn");
     } else {
       area.classList.remove("active-turn");

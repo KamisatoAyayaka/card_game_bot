@@ -145,13 +145,14 @@ async def main() -> int:
             assert data["type"] == "state"
             snap = data["snapshot"]
             assert snap["match_id"] == match.match_id
-            assert data["you"] == 111
+            # `you` is sent as a string (Discord IDs exceed JS Number.MAX_SAFE_INTEGER)
+            assert data["you"] == "111", f"Expected '111', got {data['you']!r}"
             # Alice should see her own hand
-            alice = next(p for p in snap["players"] if p["discord_id"] == 111)
+            alice = next(p for p in snap["players"] if str(p["discord_id"]) == "111")
             assert alice["hand"] is not None, "Alice should see her own hand"
             assert len(alice["hand"]) == 10
             # Bob's hand should be hidden
-            bob = next(p for p in snap["players"] if p["discord_id"] == 222)
+            bob = next(p for p in snap["players"] if str(p["discord_id"]) == "222")
             assert bob["hand"] is None, "Bob's hand should be hidden from Alice"
             log.info("✓ WS state received. Alice's hand: %d cards (Bob's hidden)", len(alice["hand"]))
 
@@ -172,7 +173,7 @@ async def main() -> int:
             msg = await asyncio.wait_for(ws_client.receive(), timeout=3)
             data = json.loads(msg.data)
             assert data["type"] == "state"
-            new_alice = next(p for p in data["snapshot"]["players"] if p["discord_id"] == 111)
+            new_alice = next(p for p in data["snapshot"]["players"] if str(p["discord_id"]) == "111")
             assert len(new_alice["hand"]) == 9, f"Expected 9 cards, got {len(new_alice['hand'])}"
             log.info("✓ Alice played %s. Hand now has %d cards", unit["name"], len(new_alice["hand"]))
 
