@@ -187,10 +187,13 @@ class LeaderSelect(ui.Select):
 class AddCardSelect(ui.Select):
     def __init__(self, parent: DeckBuilderView) -> None:
         self.parent = parent
+        # IMPORTANT: when initializing, we only have 1 placeholder option ("Загрузка…").
+        # Discord API requires len(options) >= max_values, so we use max_values=1
+        # here, and bump it to 25 in _populate() once we have real options.
         super().__init__(
             placeholder="Добавить карты в колоду",
             min_values=1,
-            max_values=25,
+            max_values=1,
             options=[discord.SelectOption(label="Загрузка…", value="__loading__")],
             custom_id="deck_add_card_select",
         )
@@ -199,6 +202,7 @@ class AddCardSelect(ui.Select):
     async def _populate(self) -> None:
         if not self.parent.faction_id:
             self.options = [discord.SelectOption(label="Сначала выберите фракцию", value="__none__")]
+            self.max_values = 1
             self._populated = True
             return
         # Combine faction cards + neutrals, exclude leaders
@@ -216,6 +220,8 @@ class AddCardSelect(ui.Select):
             )
             for c in candidates[:25]
         ]
+        # Now safe to allow multi-select (up to number of options we have)
+        self.max_values = min(25, len(self.options))
         self._populated = True
 
     @staticmethod
@@ -246,10 +252,12 @@ class AddCardSelect(ui.Select):
 class RemoveCardSelect(ui.Select):
     def __init__(self, parent: DeckBuilderView) -> None:
         self.parent = parent
+        # IMPORTANT: max_values must be ≤ len(options). Loading state has 1 option,
+        # so we use max_values=1 here and bump it after _populate().
         super().__init__(
             placeholder="Убрать карты из колоды",
             min_values=1,
-            max_values=25,
+            max_values=1,
             options=[discord.SelectOption(label="Загрузка…", value="__loading__")],
             custom_id="deck_remove_card_select",
         )
@@ -258,6 +266,7 @@ class RemoveCardSelect(ui.Select):
     async def _populate(self) -> None:
         if not self.parent.card_ids:
             self.options = [discord.SelectOption(label="Колода пуста", value="__none__")]
+            self.max_values = 1
             self._populated = True
             return
         cards = await CardService.get_many(self.parent.card_ids)
@@ -273,6 +282,7 @@ class RemoveCardSelect(ui.Select):
             for c, cnt in [(await CardService.get_card(cid), cnt) for cid, cnt in seen.items()]
             if c is not None
         ][:25]
+        self.max_values = min(25, len(self.options))
         self._populated = True
 
     async def callback(self, interaction: discord.Interaction) -> None:
