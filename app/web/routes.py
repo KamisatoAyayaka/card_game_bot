@@ -184,14 +184,60 @@ async def notify_match_finished(match: "Match") -> None:
 
 
 # ---------------------------------------------------------------------------
-# Route registration
+# Debug middleware — logs every incoming request to help diagnose 404s
 # ---------------------------------------------------------------------------
+
+@web.middleware
+async def request_log_middleware(request: web.Request, handler):
+    """Log every incoming request with full path + query, so we can see what
+    the reverse proxy (Zeabur / Cloudflare) actually forwards to us."""
+    log.info(
+        "REQUEST %s %s%s (host=%s, ua=%s)",
+        request.method,
+        request.path,
+        f"?{request.query_string}" if request.query_string else "",
+        request.host,
+        (request.headers.get("User-Agent", "")[:80]),
+    )
+    try:
+        response = await handler(request)
+        log.info("RESPONSE %s %s -> %d", request.method, request.path, response.status)
+        return response
+    except web.HTTPNotFound:
+        log.warning("404 NOT FOUND: %s %s (matched=%s)", request.method, request.path, request.match_info)
+        raise
+    except Exception as e:
+        log.exception("Error handling %s %s: %s", request.method, request.path, e)
+        raise
 
 def register_web_routes(app: web.Application) -> None:
     """Add all web routes to the aiohttp app."""
     app.router.add_get("/", root_index_handler)
     app.router.add_get("/play/{match_id}", index_handler)
+    # Also accept /play/{match_id}/ (with trailing slash) — some reverse proxies
+    # add a trailing slash before forwarding, which would otherwise 404.
+    app.router.add_get("/play/{match_id}/", index_handler)
     # Static files: /static/{tail:.*}
     app.router.add_get("/static/{tail:.*}", static_handler)
     # WebSocket
     app.router.add_get("/ws/{match_id}", ws_handler)
+
+    # Debug endpoint — lists all registered routes. Useful for diagnosing
+    # 404 issues behind reverse proxies (Zeabur, Cloudflare, etc.).
+    async def debug_routes_handler(request: web.Request) -> web.Response:
+        routes_info = []
+        for route in app.router.routes():
+            routes_info.append({
+                "method": route.method,
+                "path": route.resource.canonical if route.resource else None,
+            })
+        return web.json_response({
+            "routes": routes_info,
+            "static_dir": str(STATIC_DIR),
+            "static_dir_exists": STATIC_DIR.is_dir(),
+            "index_html_exists": (STATIC_DIR / "index.html").is_file(),
+            "cards_dir_exists": (STATIC_DIR / "cards").is_dir(),
+            "cards_count": len(list((STATIC_DIR / "cards").glob("*.png"))) if (STATIC_DIR / "cards").is_dir() else 0,
+        })
+
+    app.router.add_get("/debug/routes", debug_routes_handler)

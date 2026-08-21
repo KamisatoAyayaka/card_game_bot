@@ -222,7 +222,36 @@ def register_gwent_commands(tree: app_commands.CommandTree, bot: "discord.Client
         await match.start_match()
 
         # ---- Send the launch message with per-user buttons ----
-        base_url = CONFIG.public_base_url.rstrip("/")
+        base_url = CONFIG.public_base_url.rstrip("/") if CONFIG.public_base_url else ""
+
+        # Defensive: detect misconfigured PUBLIC_BASE_URL before sending buttons
+        from app.ui.views.launch_view import _is_valid_http_url
+        url_ok = _is_valid_http_url(base_url) if base_url else False
+
+        if not url_ok:
+            # Misconfiguration — explain to the user instead of crashing
+            error_embed = discord.Embed(
+                title="⚠️ Матч начался, но веб-интерфейс недоступен",
+                description=(
+                    f"Матч `{match.match_id}` создан, но бот не может сгенерировать ссылки на "
+                    f"игровое поле, потому что не задана переменная окружения `PUBLIC_BASE_URL`.\n\n"
+                    f"**Что делать администратору:**\n"
+                    f"1. Откройте сервис на render.com → вкладка **Environment**\n"
+                    f"2. Добавьте/отредактируйте переменную `PUBLIC_BASE_URL`\n"
+                    f"3. Укажите полный URL вашего сервиса, например:\n"
+                    f"   `https://gwent-discord-bot.onrender.com`\n"
+                    f"4. Сохраните — render.com перепубликует сервис\n\n"
+                    f"После этого матчи будут автоматически получать рабочие кнопки."
+                ),
+                color=0xE74C3C,
+            )
+            await interaction.followup.send(
+                content=" ".join(f"<@{pid}>" for pid in all_player_ids),
+                embed=error_embed,
+                allowed_mentions=discord.AllowedMentions(users=True),
+            )
+            return
+
         launch_embed = discord.Embed(
             title="🎮 Матч начался! Откройте игровое поле",
             description=(
@@ -263,7 +292,18 @@ def register_gwent_commands(tree: app_commands.CommandTree, bot: "discord.Client
             return
         # Issue (or re-issue) a token for this user
         tok = web_tokens.issue_token(match.match_id, interaction.user.id, interaction.user.display_name)
-        base_url = CONFIG.public_base_url.rstrip("/")
+        base_url = (CONFIG.public_base_url or "").rstrip("/")
+
+        from app.ui.views.launch_view import _is_valid_http_url
+        if not _is_valid_http_url(base_url):
+            await interaction.response.send_message(
+                "⚠️ Бот не настроен: переменная окружения `PUBLIC_BASE_URL` не задана "
+                "или не является корректным URL (должна начинаться с `http://` или `https://`). "
+                "Обратитесь к администратору.",
+                ephemeral=True,
+            )
+            return
+
         url = f"{base_url}/play/{match.match_id}?token={tok.token}"
         embed = discord.Embed(
             title="🎮 Ваше игровое поле",

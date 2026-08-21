@@ -22,7 +22,7 @@ from aiohttp import web
 from app.config import CONFIG
 from app.database import Database
 from app.utils.logger import get_logger, setup_logging
-from app.web.routes import register_web_routes
+from app.web.routes import register_web_routes, request_log_middleware
 
 log = get_logger(__name__)
 
@@ -51,7 +51,10 @@ async def health_handler(request: web.Request) -> web.Response:
 
 def build_web_app(bot) -> web.Application:
     """Build the aiohttp app with all routes registered."""
-    app = web.Application(client_max_size=8 * 1024 * 1024)  # 8 MB for card image uploads
+    app = web.Application(
+        client_max_size=8 * 1024 * 1024,  # 8 MB for card image uploads
+        middlewares=[request_log_middleware],
+    )
     app["bot"] = bot
     # Health check
     app.router.add_get("/health", health_handler)
@@ -81,11 +84,18 @@ async def main() -> None:
         CONFIG.port, CONFIG.database_path, CONFIG.public_base_url or "<unset>",
     )
 
-    if not CONFIG.public_base_url:
-        log.warning(
-            "PUBLIC_BASE_URL is not set. The bot will not be able to generate "
-            "working game URLs. Set it to your render.com URL (e.g. "
-            "https://my-app.onrender.com) in the render.com dashboard."
+    # Validate PUBLIC_BASE_URL — without it, /gwent challenge will produce
+    # URLs with no scheme, which Discord rejects with error 50035.
+    from app.ui.views.launch_view import _is_valid_http_url
+    if not _is_valid_http_url(CONFIG.public_base_url or ""):
+        log.error(
+            "========================================================\n"
+            "PUBLIC_BASE_URL is missing or invalid: %r\n"
+            "Without it, /gwent challenge will FAIL when sending buttons.\n"
+            "Fix: on render.com → Environment → set PUBLIC_BASE_URL to your\n"
+            "     service URL, e.g. https://gwent-discord-bot.onrender.com\n"
+            "========================================================",
+            CONFIG.public_base_url,
         )
 
     # Initialize DB eagerly so /health reflects truth
