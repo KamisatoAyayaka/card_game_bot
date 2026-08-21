@@ -365,4 +365,57 @@ def register_gwent_commands(tree: app_commands.CommandTree, bot: "discord.Client
                 )
         await interaction.response.send_message(embed=embed)
 
+    # ------------------------------------------------------------ version
+    @group.command(name="version", description="Показать версию бота (для отладки деплоя)")
+    async def version_cmd(interaction: discord.Interaction) -> None:
+        from app import __version__
+        import os
+        import time
+        from datetime import datetime, timezone
+        # Force reload some modules to check what version is actually running
+        try:
+            from app.ui.views.deck_builder import LeaderSelect
+            leader_min_values = "min_values=1 (FIXED)"
+        except Exception as e:
+            leader_min_values = f"error: {e}"
+
+        # Check if engine.py has the snowflake fix
+        import inspect
+        from app.game.engine import Match
+        src = inspect.getsource(Match.snapshot)
+        has_str_fix = "str(p.discord_id)" in src
+        snowflake_status = "✓ FIXED (str)" if has_str_fix else "✗ OLD (int)"
+
+        # Check if routes.py has new logging
+        from app.web import routes as _r
+        routes_src = inspect.getsource(_r)
+        has_ws_logging = "WS msg #" in routes_src
+        ws_log_status = "✓ NEW" if has_ws_logging else "✗ OLD"
+
+        embed = discord.Embed(
+            title="🔍 Версия бота",
+            color=0x3498DB,
+        )
+        embed.add_field(name="app.__version__", value=__version__, inline=False)
+        embed.add_field(name="Snowflake fix (snapshot)", value=snowflake_status, inline=True)
+        embed.add_field(name="WS logging", value=ws_log_status, inline=True)
+        embed.add_field(name="LeaderSelect", value=leader_min_values, inline=True)
+        embed.add_field(
+            name="Deploy time",
+            value=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+            inline=False,
+        )
+        embed.add_field(
+            name="Что делать если все строки '✗ OLD'",
+            value=(
+                "Значит на render.com работает устаревший код. "
+                "1) Проверьте, что push в GitHub дошёл (git log в локальном репо). "
+                "2) На render.com: Manual Deploy → Deploy latest commit. "
+                "3) Дождитесь полного завершения деплоя (статус 'Live'). "
+                "4) Перезапустите команду /gwent version."
+            ),
+            inline=False,
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
     tree.add_command(group)

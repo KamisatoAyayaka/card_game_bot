@@ -110,28 +110,47 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
 
     # Send initial state immediately (personalized to this viewer)
     snap = match.snapshot(viewer_discord_id=tok.discord_id)
-    await ws.send_json({
-        "type": "state",
-        "snapshot": snap,
-        # Send as string — Discord IDs exceed JS Number.MAX_SAFE_INTEGER
-        "you": str(tok.discord_id),
-    })
+    try:
+        await ws.send_json({
+            "type": "state",
+            "snapshot": snap,
+            # Send as string — Discord IDs exceed JS Number.MAX_SAFE_INTEGER
+            "you": str(tok.discord_id),
+        })
+        log.info(
+            "WS initial state sent to %s (match=%s, you=%s, current_player=%s, hand_cards=%d)",
+            tok.display_name, match_id, str(tok.discord_id),
+            snap.get("current_player_id"),
+            next((p["hand_size"] for p in snap.get("players", []) if str(p["discord_id"]) == str(tok.discord_id)), -1),
+        )
+    except Exception as e:
+        log.exception("Failed to send initial WS state to %s: %s", tok.display_name, e)
 
     # Listen for messages
+    msg_count = 0
     try:
         async for msg in ws:
+            msg_count += 1
+            log.info(
+                "WS msg #%d from %s (match=%s): type=%s data=%r",
+                msg_count, tok.display_name, match_id, msg.type, msg.data if msg.type == web.WSMsgType.TEXT else None,
+            )
             if msg.type == web.WSMsgType.TEXT:
                 try:
                     payload = json.loads(msg.data)
                 except json.JSONDecodeError:
+                    log.warning("Bad JSON from %s: %r", tok.display_name, msg.data)
                     await ws.send_json({"type": "error", "message": "Неверный JSON."})
                     continue
                 await _handle_client_action(match, tok.discord_id, payload, ws)
             elif msg.type == web.WSMsgType.ERROR:
                 log.warning("WS error: %s", ws.exception())
+            elif msg.type in (web.WSMsgType.CLOSE, web.WSMsgType.CLOSING, web.WSMsgType.CLOSED):
+                log.info("WS close signal from %s (match=%s)", tok.display_name, match_id)
+                break
     finally:
         await room.remove_client(client)
-        log.info("WS disconnected: %s (match=%s)", tok.display_name, match_id)
+        log.info("WS disconnected: %s (match=%s, total msgs received=%d)", tok.display_name, match_id, msg_count)
 
     return ws
 

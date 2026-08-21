@@ -147,6 +147,12 @@ class Match:
         instance_id: str,
         target_row: str | None = None,
     ) -> None:
+        import logging as _log
+        _logger = _log.getLogger("app.game.engine")
+        _logger.info(
+            "play_card called: discord_id=%s instance_id=%s target_row=%s phase=%s current_player=%s",
+            discord_id, instance_id, target_row, self.phase.value, self.current_player.discord_id,
+        )
         if self.phase != MatchPhase.IN_PROGRESS:
             raise MatchError(f"Cannot play card in phase {self.phase}.")
         player = self.get_player(discord_id)
