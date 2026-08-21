@@ -416,8 +416,13 @@ class Match:
             self.log.append(f"У фракции «{faction_id}» нет активной способности лидера.")
 
     # --------------------------------------------------------- snapshot
-    def snapshot(self) -> dict[str, Any]:
-        """Return a JSON-serialisable snapshot for Discord rendering."""
+    def snapshot(self, viewer_discord_id: int | None = None) -> dict[str, Any]:
+        """Return a JSON-serialisable snapshot for Discord/web rendering.
+
+        If `viewer_discord_id` is provided, that player's hand is included
+        (with full card details). Other players' hands are obscured (only
+        card count is exposed).
+        """
         return {
             "match_id": self.match_id,
             "phase": self.phase.value,
@@ -435,6 +440,8 @@ class Match:
                     "deck_size": p.deck_size,
                     "leader_used_this_round": p.leader_used_this_round,
                     "leader_name": p.leader_card.name if p.leader_card else None,
+                    "leader_card_id": p.leader_card.id if p.leader_card else None,
+                    "leader_image": p.leader_card.image_url() if p.leader_card else None,
                     "total_strength": self.board.player_strength(p.discord_id),
                     "rows": {
                         r: [
@@ -446,11 +453,35 @@ class Match:
                                 "current": u.current_strength,
                                 "hero": u.card.hero,
                                 "weathered": u.weathered,
+                                "image": u.card.image_url(),
+                                "row": r,
+                                "type": u.card.type.value,
+                                "tags": list(u.card.tags),
                             }
                             for u in self.board.units_in_row(p.discord_id, r)
                         ]
                         for r in ("melee", "ranged", "siege")
                     },
+                    # Only reveal full hand to the viewer themselves
+                    "hand": (
+                        [
+                            {
+                                "id": ci.instance_id,
+                                "card_id": ci.card.id,
+                                "name": ci.card.name,
+                                "type": ci.card.type.value,
+                                "base": ci.card.base_strength,
+                                "row": ci.card.row.value if ci.card.row else None,
+                                "hero": ci.card.hero,
+                                "image": ci.card.image_url(),
+                                "description": ci.card.description,
+                                "effects": [e.model_dump() for e in ci.card.effects],
+                            }
+                            for ci in p.hand
+                        ]
+                        if viewer_discord_id is not None and p.discord_id == viewer_discord_id
+                        else None
+                    ),
                 }
                 for p in self.players
             ],

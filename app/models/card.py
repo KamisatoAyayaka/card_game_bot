@@ -125,6 +125,17 @@ class Card(BaseModel):
     def is_leader(self) -> bool:
         return self.type == CardType.LEADER
 
+    def image_url(self, base_url: str = "") -> str:
+        """Return the URL to this card's PNG image.
+
+        Images live at /static/cards/{card_id}.png on the bot's web server.
+        If `base_url` is provided (e.g. https://your-app.onrender.com), it is
+        prepended; otherwise a relative URL is returned (useful when the
+        frontend is served from the same origin).
+        """
+        base = base_url.rstrip("/")
+        return f"{base}/static/cards/{self.id}.png"
+
     def to_db_row(self) -> dict[str, Any]:
         """Serialize for INSERT into the SQLite `cards` table."""
         return {

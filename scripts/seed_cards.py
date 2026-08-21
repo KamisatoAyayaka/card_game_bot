@@ -30,6 +30,18 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Seed SQLite with JSON card data.")
     p.add_argument("--file", type=Path, help="Import only this JSON file")
     p.add_argument("--all", action="store_true", help="Import factions + leaders + all cards (default)")
+    p.add_argument(
+        "--generate-images",
+        action="store_true",
+        default=True,
+        help="Also (re)generate PNG card images (default: on)",
+    )
+    p.add_argument(
+        "--no-images",
+        dest="generate_images",
+        action="store_false",
+        help="Skip image generation",
+    )
     return p.parse_args()
 
 
@@ -65,6 +77,13 @@ async def main() -> int:
 
     await CardService.reload()
     log.info("Card cache refreshed.")
+
+    # Auto-generate card images so the web UI can serve them
+    if args.generate_images:
+        from scripts.generate_card_images import generate_all_cards
+        img_count = await generate_all_cards()
+        log.info("Generated %d card image(s).", img_count)
+
     await Database.close()
     return 0
 

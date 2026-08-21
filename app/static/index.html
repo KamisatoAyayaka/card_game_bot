@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gwent — Игровое поле</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<div id="app">
+  <!-- Loading / error overlay -->
+  <div id="overlay" class="overlay">
+    <div class="overlay-content">
+      <div class="spinner"></div>
+      <p id="overlay-text">Подключение к матчу…</p>
+    </div>
+  </div>
+
+  <!-- Top bar: match info + your identity -->
+  <header class="topbar">
+    <div class="match-info">
+      <span id="match-id">—</span> ·
+      Раунд <span id="round-current">1</span>/<span id="round-total">3</span> ·
+      <span id="phase">—</span>
+    </div>
+    <div class="weather-strip" id="weather-strip"></div>
+    <div class="you-info">
+      <span>Вы: <strong id="your-name">—</strong></span>
+    </div>
+  </header>
+
+  <!-- Game board: opponent on top, you on bottom -->
+  <main class="board">
+    <!-- Opponent area -->
+    <section class="player-area opponent" id="opponent-area">
+      <div class="player-header">
+        <div class="player-name" id="opponent-name">Ожидание противника…</div>
+        <div class="player-stats">
+          <span class="strength-total" id="opponent-strength">0</span>
+          <span class="rounds-won" id="opponent-rounds">0</span>
+        </div>
+      </div>
+      <div class="player-rows" id="opponent-rows">
+        <div class="row siege" data-row="siege">
+          <div class="row-label">🏰 Осада</div>
+          <div class="row-units"></div>
+          <div class="row-strength">0</div>
+        </div>
+        <div class="row ranged" data-row="ranged">
+          <div class="row-label">🏹 Дальний бой</div>
+          <div class="row-units"></div>
+          <div class="row-strength">0</div>
+        </div>
+        <div class="row melee" data-row="melee">
+          <div class="row-label">⚔️ Ближний бой</div>
+          <div class="row-units"></div>
+          <div class="row-strength">0</div>
+        </div>
+      </div>
+      <div class="player-meta">
+        <span>📚 Колода: <span id="opponent-deck-size">0</span></span>
+        <span>✋ Рука: <span id="opponent-hand-size">0</span></span>
+        <span>💤 <span id="opponent-passed"></span></span>
+        <span id="opponent-leader-badge" class="leader-badge"></span>
+      </div>
+    </section>
+
+    <!-- Divider -->
+    <div class="board-divider">
+      <div class="divider-line"></div>
+    </div>
+
+    <!-- Your area -->
+    <section class="player-area you" id="you-area">
+      <div class="player-header">
+        <div class="player-name" id="your-name-display">Вы</div>
+        <div class="player-stats">
+          <span class="strength-total" id="your-strength">0</span>
+          <span class="rounds-won" id="your-rounds">0</span>
+        </div>
+      </div>
+      <div class="player-rows" id="your-rows">
+        <div class="row siege" data-row="siege">
+          <div class="row-label">🏰 Осада</div>
+          <div class="row-units"></div>
+          <div class="row-strength">0</div>
+        </div>
+        <div class="row ranged" data-row="ranged">
+          <div class="row-label">🏹 Дальний бой</div>
+          <div class="row-units"></div>
+          <div class="row-strength">0</div>
+        </div>
+        <div class="row melee" data-row="melee">
+          <div class="row-label">⚔️ Ближний бой</div>
+          <div class="row-units"></div>
+          <div class="row-strength">0</div>
+        </div>
+      </div>
+      <div class="player-meta">
+        <span>📚 Колода: <span id="your-deck-size">0</span></span>
+        <span>✋ Рука: <span id="your-hand-size">0</span></span>
+        <span id="your-leader-badge" class="leader-badge"></span>
+      </div>
+    </section>
+  </main>
+
+  <!-- Hand + actions -->
+  <footer class="hand-area">
+    <div class="hand-container">
+      <div class="hand" id="your-hand">
+        <div class="hand-placeholder">Рука пуста</div>
+      </div>
+    </div>
+    <div class="actions">
+      <button id="btn-leader" class="action-btn leader-btn" disabled>
+        👑 Способность лидера
+      </button>
+      <button id="btn-pass" class="action-btn pass-btn" disabled>
+        💤 Пас
+      </button>
+      <button id="btn-surrender" class="action-btn surrender-btn">
+        🏳️ Сдаться
+      </button>
+    </div>
+  </footer>
+
+  <!-- Card preview tooltip -->
+  <div id="card-tooltip" class="card-tooltip hidden"></div>
+
+  <!-- Event log -->
+  <aside class="log-panel">
+    <h3>Журнал</h3>
+    <ul id="log-list"></ul>
+  </aside>
+</div>
+
+<script src="/static/js/app.js"></script>
+</body>
+</html>
