@@ -45,7 +45,14 @@ async def static_handler(request: web.Request) -> web.StreamResponse:
     if not requested.is_file():
         raise web.HTTPNotFound()
 
-    return web.FileResponse(requested)
+    resp = web.FileResponse(requested)
+    # Disable caching for HTML, JS, CSS (so changes deploy immediately).
+    # Card images (PNG) can be cached since they never change for a given card_id.
+    if requested.suffix in (".html", ".js", ".css"):
+        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+    return resp
 
 
 async def index_handler(request: web.Request) -> web.StreamResponse:
@@ -57,7 +64,12 @@ async def index_handler(request: web.Request) -> web.StreamResponse:
     html_path = STATIC_DIR / "index.html"
     if not html_path.is_file():
         return web.Response(text="index.html not found", status=500)
-    return web.FileResponse(html_path)
+    resp = web.FileResponse(html_path)
+    # Always disable caching for the HTML — ensures the latest JS version loads
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 async def root_index_handler(request: web.Request) -> web.StreamResponse:

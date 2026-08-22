@@ -14,6 +14,23 @@
   let isYourTurn = false;
   let selectedCardInstanceId = null;
 
+  // ----------------------------------------------------------- debug log
+  const DEBUG = true;
+  const debugLog = [];
+  function dbg(msg) {
+    if (!DEBUG) return;
+    const ts = new Date().toLocaleTimeString();
+    const line = `[${ts}] ${msg}`;
+    debugLog.push(line);
+    if (debugLog.length > 20) debugLog.shift();
+    console.log(line);
+    const el = document.getElementById("debug-log");
+    if (el) {
+      el.innerHTML = debugLog.map((l) => `<div>${l}</div>`).join("");
+      el.scrollTop = el.scrollHeight;
+    }
+  }
+
   // ----------------------------------------------------------- dom refs
   const $ = (id) => document.getElementById(id);
   const overlay = $("overlay");
@@ -21,10 +38,12 @@
 
   // ----------------------------------------------------------- entry
   window.addEventListener("DOMContentLoaded", () => {
+    dbg("DOMContentLoaded");
     // Parse URL: /play/{match_id}?token=xxx
     const pathParts = window.location.pathname.split("/");
     matchId = pathParts[pathParts.length - 1] || pathParts[pathParts.length - 2];
     token = new URLSearchParams(window.location.search).get("token");
+    dbg(`matchId=${matchId} token=${token ? token.slice(0, 8) + "..." : "(none)"}`);
     if (!matchId || !token) {
       showOverlay("Неверная ссылка. Используйте кнопку из Discord-сообщения.", true);
       return;
@@ -32,23 +51,39 @@
     connectWebSocket();
   });
 
+  // Global error handler to surface JS errors
+  window.addEventListener("error", (e) => {
+    dbg(`❌ JS ERROR: ${e.message} at ${e.filename}:${e.lineno}:${e.colno}`);
+  });
+  window.addEventListener("unhandledrejection", (e) => {
+    dbg(`❌ UNHANDLED PROMISE: ${e.reason}`);
+  });
+
   // ----------------------------------------------------------- WebSocket
   function connectWebSocket() {
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${proto}//${window.location.host}/ws/${matchId}?token=${token}`;
-    console.log("Connecting to", wsUrl);
-    ws = new WebSocket(wsUrl);
+    dbg(`Connecting to WS: ${wsUrl.replace(token, "***")}`);
+    try {
+      ws = new WebSocket(wsUrl);
+    } catch (e) {
+      dbg(`❌ WebSocket constructor failed: ${e}`);
+      showOverlay("Ошибка создания WebSocket: " + e, true);
+      return;
+    }
 
     ws.onopen = () => {
-      console.log("WS connected");
+      dbg("✓ WS connected (onopen)");
       hideOverlay();
     };
 
     ws.onmessage = (evt) => {
+      dbg(`◀ WS message received (len=${evt.data.length})`);
       let msg;
       try {
         msg = JSON.parse(evt.data);
       } catch (e) {
+        dbg(`❌ Bad JSON: ${e}`);
         console.error("Bad JSON", e);
         return;
       }
@@ -56,12 +91,13 @@
     };
 
     ws.onerror = (err) => {
+      dbg(`❌ WS error (onerror)`);
       console.error("WS error", err);
       showOverlay("Ошибка соединения. Переподключение…", false);
     };
 
-    ws.onclose = () => {
-      console.log("WS closed");
+    ws.onclose = (ev) => {
+      dbg(`✗ WS closed (onclose) code=${ev.code} reason="${ev.reason}" clean=${ev.wasClean}`);
       if (snapshot && snapshot.phase !== "finished") {
         showOverlay("Соединение потеряно. Переподключение через 2 секунды…", false);
         setTimeout(connectWebSocket, 2000);
@@ -76,14 +112,22 @@
   }
 
   function handleMessage(msg) {
+    dbg(`handleMessage: type=${msg.type}`);
     if (msg.type === "state") {
       snapshot = msg.snapshot;
       // `you` is sent as a string because Discord snowflake IDs exceed
       // JavaScript's Number.MAX_SAFE_INTEGER (2^53 - 1).
       // We compare IDs as strings everywhere.
       if (msg.you !== undefined) youId = String(msg.you);
+      dbg(`  youId=${youId}`);
+      dbg(`  current_player_id=${snapshot.current_player_id} (type=${typeof snapshot.current_player_id})`);
+      dbg(`  players count=${snapshot.players.length}`);
+      snapshot.players.forEach((p, i) => {
+        dbg(`    [${i}] discord_id=${p.discord_id} name=${p.name} hand=${p.hand ? p.hand.length + " cards" : "hidden"}`);
+      });
       render();
     } else if (msg.type === "error") {
+      dbg(`  ERROR from server: ${msg.message}`);
       showToast(msg.message);
     } else if (msg.type === "pong") {
       // ignore
@@ -103,6 +147,7 @@
     // Determine "you" vs "opponent(s)"
     const you = snapshot.players.find((p) => String(p.discord_id) === youId);
     const opponents = snapshot.players.filter((p) => String(p.discord_id) !== youId);
+    dbg(`render: youId=${youId}, you=${you ? you.name : "NOT FOUND"}, opponents=${opponents.length}, isYourTurn=${isYourTurn}`);
 
     // Top bar
     renderWeather(snapshot.weather);
@@ -115,7 +160,7 @@
 
     // Your area
     if (you) {
-      renderPlayerArea(you, "you");
+      renderPlayerArea(you, "your");
       renderHand(you);
     }
 
@@ -189,14 +234,18 @@
   }
 
   function renderPlayerArea(player, prefix) {
-    $(prefix + "-name").textContent = player.name + (player.passed ? " 💤" : "");
+    // For "you" we pass prefix="your" (to match HTML IDs like your-strength, your-name-display).
+    // For "opponent" we pass prefix="opponent".
+    // The area element uses "you-area" / "opponent-area" (special case below).
+    const nameElId = prefix === "your" ? "your-name-display" : prefix + "-name";
+    $(nameElId).textContent = player.name + (player.passed ? " 💤" : "");
     $(prefix + "-strength").textContent = player.total_strength;
     $(prefix + "-rounds").textContent = player.rounds_won;
     $(prefix + "-deck-size").textContent = player.deck_size;
     $(prefix + "-hand-size").textContent = player.hand_size;
 
     // Highlight current player
-    const area = $(prefix === "you" ? "you-area" : "opponent-area");
+    const area = $(prefix === "your" ? "you-area" : "opponent-area");
     if (String(player.discord_id) === String(snapshot.current_player_id) && snapshot.phase === "in_progress") {
       area.classList.add("active-turn");
     } else {
