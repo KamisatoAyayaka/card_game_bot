@@ -300,12 +300,46 @@ def register_web_routes(app: web.Application) -> None:
     async def debug_cards_handler(request: web.Request) -> web.Response:
         import hashlib
         import os
+        import subprocess
         from datetime import datetime, timezone
 
         card_id_filter = request.query.get("card_id")
         cards_dir = STATIC_DIR / "cards"
         if not cards_dir.is_dir():
             return web.json_response({"error": "cards dir not found", "path": str(cards_dir)})
+
+        # Try to gather git info — this helps diagnose "file didn't make it to server" issues.
+        # subprocess.run is sync but fast (<100ms); we accept the brief block.
+        git_info: dict = {}
+        try:
+            # Find the git root by walking up from STATIC_DIR
+            git_dir = STATIC_DIR
+            for _ in range(10):
+                if (git_dir / ".git").exists():
+                    break
+                git_dir = git_dir.parent
+            else:
+                git_dir = None
+
+            if git_dir:
+                def _git(*args: str) -> str:
+                    r = subprocess.run(
+                        ["git", "-C", str(git_dir), *args],
+                        capture_output=True, text=True, timeout=3,
+                    )
+                    return r.stdout.strip() if r.returncode == 0 else f"(git error: {r.stderr.strip()})"
+
+                git_info = {
+                    "repo_root": str(git_dir),
+                    "head_commit": _git("rev-parse", "HEAD"),
+                    "head_short": _git("rev-parse", "--short", "HEAD"),
+                    "current_branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
+                    "last_commit_message": _git("log", "-1", "--pretty=%s"),
+                    "last_commit_date": _git("log", "-1", "--pretty=%ci"),
+                    "last_commit_author": _git("log", "-1", "--pretty=%an"),
+                }
+        except Exception as e:
+            git_info = {"error": f"git not available: {e}"}
 
         items = []
         for png_path in sorted(cards_dir.glob("*.png")):
@@ -318,6 +352,14 @@ def register_web_routes(app: web.Application) -> None:
             if card_id_filter:
                 with open(png_path, "rb") as f:
                     md5 = hashlib.md5(f.read()).hexdigest()
+            # Also try to get git log for this specific file
+            git_file_log = None
+            if card_id_filter and git_info and "error" not in git_info:
+                try:
+                    rel_path = png_path.relative_to(git_dir)
+                    git_file_log = _git("log", "-1", "--pretty=%h %an %ci %s", "--", str(rel_path))
+                except Exception:
+                    pass
             items.append({
                 "card_id": cid,
                 "filename": png_path.name,
@@ -325,11 +367,13 @@ def register_web_routes(app: web.Application) -> None:
                 "size_kb": round(stat.st_size / 1024, 1),
                 "modified_utc": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
                 "md5": md5 or None,
+                "git_last_commit": git_file_log,
             })
 
         return web.json_response({
             "count": len(items),
             "filter": card_id_filter,
+            "git_info": git_info,
             "items": items,
         })
 

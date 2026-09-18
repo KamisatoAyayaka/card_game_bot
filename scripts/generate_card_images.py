@@ -332,12 +332,21 @@ def render_card_image(card: Card, faction_color_hex: str | None = None) -> Image
     return card_img
 
 
-async def generate_all_cards(only_card_id: str | None = None, width: int | None = None, height: int | None = None) -> int:
+async def generate_all_cards(
+    only_card_id: str | None = None,
+    width: int | None = None,
+    height: int | None = None,
+    force: bool = False,
+) -> int:
     """Generate PNGs for every card (or just one). Returns count generated.
 
     If width/height are provided, they override the module-level CARD_W/CARD_H
     for this run — useful for regenerating at a different resolution without
     editing source.
+
+    If `force` is False (default), cards that already have a PNG on disk are
+    skipped — this preserves custom artwork. Set `force=True` to overwrite
+    all PNGs with freshly rendered placeholders.
     """
     global CARD_W, CARD_H, CORNER_RADIUS
     if width and height:
@@ -359,14 +368,29 @@ async def generate_all_cards(only_card_id: str | None = None, width: int | None 
             return 0
 
     count = 0
+    skipped = 0
     for card in cards:
+        out_path = STATIC_CARDS_DIR / f"{card.id}.png"
+        # Skip cards that already have a PNG on disk — this preserves custom
+        # artwork uploaded by the user (e.g. via GitHub). The auto-seed logic
+        # in app/bot.py only calls generate_all_cards() when the cards dir is
+        # empty, but on render.com the disk may be reset between deploys while
+        # the user's PNGs (committed in git) ARE still present in the source
+        # tree — we must not overwrite them.
+        # Use --force to override this behavior (e.g. when you want to
+        # regenerate placeholders for all cards).
+        if out_path.exists() and not force:
+            log.info("Skipping %s (PNG already exists; use --force to overwrite)", card.id)
+            skipped += 1
+            continue
         faction = factions.get(card.faction_id)
         faction_color = faction.color if faction else None
         img = render_card_image(card, faction_color)
-        out_path = STATIC_CARDS_DIR / f"{card.id}.png"
         img.save(out_path, "PNG")
         log.info("Rendered %s -> %s", card.id, out_path.name)
         count += 1
+    if skipped:
+        log.info("Skipped %d card(s) that already had PNGs.", skipped)
     return count
 
 
@@ -380,6 +404,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--height", type=int, default=None,
         help="Override card height (default: 840). Width must also be provided.",
+    )
+    p.add_argument(
+        "--force", action="store_true", default=False,
+        help="Overwrite existing PNGs (default: skip cards that already have a PNG).",
     )
     return p.parse_args()
 
@@ -396,6 +424,7 @@ async def main() -> int:
         only_card_id=args.card_id,
         width=args.width,
         height=args.height,
+        force=args.force,
     )
     log.info("Generated %d card image(s) in %s", n, STATIC_CARDS_DIR)
     await Database.close()

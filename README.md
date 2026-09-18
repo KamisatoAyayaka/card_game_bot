@@ -187,8 +187,21 @@ card. To use your own custom artwork instead:
 2. Re-deploy. The web UI will pick up your custom image automatically.
 
 You can mix and match: generated PNGs for cards without custom art, custom
-PNGs for the cards you've drawn art for. Re-running `generate_card_images.py`
-will overwrite existing files, so back up any custom art first.
+PNGs for the cards you've drawn art for.
+
+**IMPORTANT:** By default, `generate_card_images.py` (and the auto-seed logic
+in `app/bot.py`) **does not overwrite** existing PNGs — your custom artwork
+is preserved across redeploys. If you want to regenerate all placeholders
+(e.g. after changing the card JSON description), pass `--force`:
+
+```bash
+python -m scripts.generate_card_images --force
+```
+
+Or for a single card:
+```bash
+python -m scripts.generate_card_images --card-id coven_elder_ent --force
+```
 
 ### Choosing card image resolution
 
