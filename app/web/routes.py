@@ -120,7 +120,15 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
 
     log.info("WS connected: %s (match=%s)", tok.display_name, match_id)
 
-    # Send initial state immediately (personalized to this viewer)
+    # Mark player as connected. If this was the last player needed, start_match()
+    # will be called automatically and emit a match_started event.
+    just_started = await match.mark_player_connected(tok.discord_id)
+    if just_started:
+        log.info("Match %s just started — all players connected.", match_id)
+
+    # Send initial state immediately (personalized to this viewer).
+    # If match is still in waiting room (not all players connected yet), the
+    # snapshot will include `waiting_for_players: true` and `players_not_connected`.
     snap = match.snapshot(viewer_discord_id=tok.discord_id)
     try:
         await ws.send_json({
@@ -130,13 +138,18 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
             "you": str(tok.discord_id),
         })
         log.info(
-            "WS initial state sent to %s (match=%s, you=%s, current_player=%s, hand_cards=%d)",
+            "WS initial state sent to %s (match=%s, you=%s, current_player=%s, hand_cards=%d, waiting=%s)",
             tok.display_name, match_id, str(tok.discord_id),
             snap.get("current_player_id"),
             next((p["hand_size"] for p in snap.get("players", []) if str(p["discord_id"]) == str(tok.discord_id)), -1),
+            snap.get("waiting_for_players"),
         )
     except Exception as e:
         log.exception("Failed to send initial WS state to %s: %s", tok.display_name, e)
+
+    # If we just started the match (or are still waiting), broadcast updated
+    # state to ALL connected clients so their UIs refresh.
+    await WS_MANAGER.broadcast_match_state(match)
 
     # Listen for messages
     msg_count = 0
@@ -277,3 +290,47 @@ def register_web_routes(app: web.Application) -> None:
         })
 
     app.router.add_get("/debug/routes", debug_routes_handler)
+
+    # Debug endpoint — list every card PNG with size + last-modified time + md5.
+    # Useful when you need to verify (without SSH/shell access) that a recently
+    # pushed card image actually made it onto the server.
+    # Usage:
+    #   /debug/cards                       — list all cards
+    #   /debug/cards?card_id=coven_elder_ent — show only one card (also includes md5)
+    async def debug_cards_handler(request: web.Request) -> web.Response:
+        import hashlib
+        import os
+        from datetime import datetime, timezone
+
+        card_id_filter = request.query.get("card_id")
+        cards_dir = STATIC_DIR / "cards"
+        if not cards_dir.is_dir():
+            return web.json_response({"error": "cards dir not found", "path": str(cards_dir)})
+
+        items = []
+        for png_path in sorted(cards_dir.glob("*.png")):
+            cid = png_path.stem
+            if card_id_filter and cid != card_id_filter:
+                continue
+            stat = png_path.stat()
+            # Compute md5 (only for single-card queries, to avoid hashing 47 files)
+            md5 = ""
+            if card_id_filter:
+                with open(png_path, "rb") as f:
+                    md5 = hashlib.md5(f.read()).hexdigest()
+            items.append({
+                "card_id": cid,
+                "filename": png_path.name,
+                "size_bytes": stat.st_size,
+                "size_kb": round(stat.st_size / 1024, 1),
+                "modified_utc": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+                "md5": md5 or None,
+            })
+
+        return web.json_response({
+            "count": len(items),
+            "filter": card_id_filter,
+            "items": items,
+        })
+
+    app.router.add_get("/debug/cards", debug_cards_handler)

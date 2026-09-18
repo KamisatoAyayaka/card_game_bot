@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Optional
 
 import discord
@@ -21,6 +22,8 @@ from app.ui.views.invite_view import InviteView
 from app.web import tokens as web_tokens
 from app.web import websocket as web_ws
 from app.web.routes import notify_match_finished, notify_match_started
+
+log = logging.getLogger(__name__)
 
 
 def register_gwent_commands(tree: app_commands.CommandTree, bot: "discord.Client") -> None:
@@ -128,7 +131,17 @@ def register_gwent_commands(tree: app_commands.CommandTree, bot: "discord.Client
         all_player_ids = [interaction.user.id] + challenged_ids
         participants_data: list[tuple[int, str, str, list[str], str | None]] = []
 
+        # Build display name map from Discord Member objects
+        all_members = [interaction.user, opponent, opponent2, opponent3]
+        name_map: dict[int, str] = {}
+        for m in all_members:
+            if m is not None:
+                # Use display_name (nickname if set, else username) — no "<@...>" wrapper
+                # because it would render as a broken HTML tag in the web UI.
+                name_map[m.id] = getattr(m, "display_name", None) or getattr(m, "name", f"Player {m.id}")
+
         for pid in all_player_ids:
+            display_name = name_map.get(pid, f"Player {pid}")
             if preset:
                 preset_data = DeckService.load_preset(preset)
                 if not preset_data:
@@ -139,7 +152,7 @@ def register_gwent_commands(tree: app_commands.CommandTree, bot: "discord.Client
                 participants_data.append(
                     (
                         pid,
-                        f"<@{pid}>",
+                        display_name,
                         preset_data["faction_id"],
                         list(preset_data["card_ids"]),
                         preset_data.get("leader_card_id"),
@@ -149,7 +162,7 @@ def register_gwent_commands(tree: app_commands.CommandTree, bot: "discord.Client
                 decks = await DeckService.list_decks(pid)
                 if not decks:
                     await interaction.followup.send(
-                        f"У <@{pid}> нет сохранённых колод. Используйте `/deck build` "
+                        f"У {display_name} нет сохранённых колод. Используйте `/deck build` "
                         f"или `/gwent challenge ... preset:<имя>`.",
                         ephemeral=False,
                     )
@@ -158,7 +171,7 @@ def register_gwent_commands(tree: app_commands.CommandTree, bot: "discord.Client
                 participants_data.append(
                     (
                         pid,
-                        f"<@{pid}>",
+                        display_name,
                         deck.faction_id,
                         list(deck.card_ids),
                         deck.leader_card_id,
@@ -192,10 +205,7 @@ def register_gwent_commands(tree: app_commands.CommandTree, bot: "discord.Client
 
         # ---- Issue web access tokens for every participant ----
         for pid in all_player_ids:
-            display_name = next(
-                (m.display_name for m in [interaction.user, opponent, opponent2, opponent3] if m and m.id == pid),
-                f"Player {pid}",
-            )
+            display_name = name_map.get(pid, f"Player {pid}")
             web_tokens.issue_token(match.match_id, pid, display_name)
 
         # ---- Event listener: WS broadcast + Discord notifications ----
@@ -219,7 +229,13 @@ def register_gwent_commands(tree: app_commands.CommandTree, bot: "discord.Client
         match.add_listener(on_event)
         await MatchService.register(interaction.channel.id, match)
         await notify_match_started(match)
-        await match.start_match()
+        # NOTE: do NOT call start_match() here — the match will auto-start when
+        # all players open their web UI and connect via WebSocket.
+        # This is handled by mark_player_connected() in app/web/routes.py.
+        log.info(
+            "Match %s created (channel=%s, rounds=%d, players=%d) — waiting for WS connections",
+            match.match_id, interaction.channel.id, rounds_total, len(match.players),
+        )
 
         # ---- Send the launch message with per-user buttons ----
         base_url = CONFIG.public_base_url.rstrip("/") if CONFIG.public_base_url else ""

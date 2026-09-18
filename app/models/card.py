@@ -132,9 +132,19 @@ class Card(BaseModel):
         If `base_url` is provided (e.g. https://your-app.onrender.com), it is
         prepended; otherwise a relative URL is returned (useful when the
         frontend is served from the same origin).
+
+        A `?v=<release_tag>` query parameter is appended for cache-busting:
+        when the bot redeploys with a new version, browsers and CDNs will
+        treat the URL as new and re-fetch the image. Without this, a stale
+        CDN cache can keep serving old card art indefinitely.
         """
+        from app import __version__ as _app_version
+        # Use the version string as cache-busting tag. Bump __version__ in
+        # app/__init__.py on every deploy that includes new card images.
         base = base_url.rstrip("/")
-        return f"{base}/static/cards/{self.id}.png"
+        # Sanitize: only alphanumerics + dash, no dots (URL-safe)
+        tag = "".join(c if c.isalnum() or c == "-" else "-" for c in _app_version)
+        return f"{base}/static/cards/{self.id}.png?v={tag}"
 
     def to_db_row(self) -> dict[str, Any]:
         """Serialize for INSERT into the SQLite `cards` table."""

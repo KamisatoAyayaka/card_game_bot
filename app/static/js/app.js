@@ -122,6 +122,7 @@
       dbg(`  youId=${youId}`);
       dbg(`  current_player_id=${snapshot.current_player_id} (type=${typeof snapshot.current_player_id})`);
       dbg(`  players count=${snapshot.players.length}`);
+      dbg(`  started=${snapshot.started} waiting_for_players=${snapshot.waiting_for_players}`);
       snapshot.players.forEach((p, i) => {
         dbg(`    [${i}] discord_id=${p.discord_id} name=${p.name} hand=${p.hand ? p.hand.length + " cards" : "hidden"}`);
       });
@@ -138,9 +139,23 @@
   function render() {
     if (!snapshot) return;
     $("match-id").textContent = snapshot.match_id;
-    $("round-current").textContent = snapshot.round;
+    $("round-current").textContent = snapshot.round || 0;
     $("round-total").textContent = snapshot.rounds_total;
     $("phase").textContent = phaseLabel(snapshot.phase);
+
+    // WAITING ROOM: show overlay if match hasn't started yet
+    if (snapshot.waiting_for_players) {
+      const waiting = snapshot.players_not_connected || [];
+      const list = waiting.length > 0 ? waiting.join(", ") : "никого";
+      showOverlay(
+        `⏳ Ожидание подключения игроков: ${list}\n` +
+        `Подключено: ${snapshot.connected_players.length} / ${snapshot.players.length}`,
+        false,
+      );
+      // Still render the basic structure so the page isn't blank
+      return;
+    }
+    hideOverlay();
 
     isYourTurn = String(snapshot.current_player_id) === youId && snapshot.phase === "in_progress";
 
@@ -290,9 +305,12 @@
       }
       card.dataset.instanceId = unit.id;
     }
-    if (unit.type === "unit" || unit.current !== undefined) {
+    if (unit.type === "unit" || unit.current !== undefined || unit.base !== undefined) {
       card.classList.add("strength-badge");
-      card.dataset.strength = unit.current;
+      // For cards on the board, use `current` (which accounts for weather, morale boost, etc.)
+      // For cards in hand, only `base` is available (current strength = base until played).
+      const strength = unit.current !== undefined ? unit.current : unit.base;
+      card.dataset.strength = String(strength);
     }
     const img = document.createElement("img");
     img.src = unit.image;
@@ -441,6 +459,8 @@
   // ----------------------------------------------------------- helpers
   function showOverlay(text, isError) {
     overlayText.textContent = text;
+    // Also support multi-line text via white-space: pre-line
+    overlayText.style.whiteSpace = "pre-line";
     overlay.classList.remove("hidden");
     if (isError) {
       overlay.querySelector(".spinner").style.display = "none";

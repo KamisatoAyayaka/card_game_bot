@@ -56,6 +56,12 @@ class Match:
     winner: PlayerState | None = None
     card_lookup: dict[str, Card] = field(default_factory=dict)
     _listeners: list[EventListener] = field(default_factory=list)
+    # ---- Waiting room state ----
+    # Players who have connected their WebSocket at least once.
+    # Match doesn't start until ALL players are in this set.
+    connected_players: set[int] = field(default_factory=set)
+    # Whether start_match() has actually been called (after everyone joined)
+    started: bool = False
 
     # --------------------------------------------------------- construction
     @classmethod
@@ -101,7 +107,24 @@ class Match:
                 self.log.append(f"[listener error] {e}")
 
     # --------------------------------------------------------- start
+    async def mark_player_connected(self, discord_id: int) -> bool:
+        """Called by the WS handler when a player connects.
+        Returns True if all players have now connected AND the match just started.
+        Returns False if more players are still needed (or match already started).
+        """
+        self.connected_players.add(discord_id)
+        if self.started:
+            return False
+        # Check if everyone is here
+        expected = {p.discord_id for p in self.players}
+        if expected.issubset(self.connected_players):
+            await self.start_match()
+            return True
+        return False
+
     async def start_match(self) -> None:
+        if self.started:
+            return
         if self.phase != MatchPhase.CREATED:
             raise MatchError("Match already started.")
         # Deal 10 cards to each player (classic Gwent opening hand size).
@@ -111,8 +134,19 @@ class Match:
         self.starting_player_index = 0
         self.current_player_index = 0
         self.phase = MatchPhase.IN_PROGRESS
+        self.started = True
         self.log.append("Матч начался. Каждому игроку роздано по 10 карт.")
         await self._emit("match_started", {"round": self.current_round})
+
+    @property
+    def waiting_for_players(self) -> bool:
+        """True if match is in waiting room state (not yet started)."""
+        return not self.started
+
+    @property
+    def players_not_yet_connected(self) -> list[PlayerState]:
+        """Players who haven't opened the game page yet."""
+        return [p for p in self.players if p.discord_id not in self.connected_players]
 
     # --------------------------------------------------------- queries
     @property
@@ -440,7 +474,11 @@ class Match:
             "phase": self.phase.value,
             "round": self.current_round,
             "rounds_total": self.rounds_total,
-            "current_player_id": str(self.current_player.discord_id),
+            "current_player_id": str(self.current_player.discord_id) if self.started else None,
+            "started": self.started,
+            "waiting_for_players": self.waiting_for_players,
+            "connected_players": [str(pid) for pid in self.connected_players],
+            "players_not_connected": [p.display_name for p in self.players_not_yet_connected],
             "players": [
                 {
                     "discord_id": str(p.discord_id),
@@ -483,6 +521,10 @@ class Match:
                                 "name": ci.card.name,
                                 "type": ci.card.type.value,
                                 "base": ci.card.base_strength,
+                                # `current` = base for cards in hand (no weather/bonus applied yet).
+                                # Including it here simplifies frontend logic — it can always read
+                                # `unit.current` instead of falling back to `unit.base`.
+                                "current": ci.current_strength,
                                 "row": ci.card.row.value if ci.card.row else None,
                                 "hero": ci.card.hero,
                                 "image": ci.card.image_url(),
